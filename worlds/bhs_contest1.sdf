@@ -1,0 +1,357 @@
+<?xml version="1.0" ?>
+<sdf version="1.10">
+  <world name="bhs_world">
+
+    <physics name="2ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <gui fullscreen="false">
+      <plugin filename="MinimalScene" name="3D View">
+        <gz-gui>
+          <title>3D View</title>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="string" key="state">docked</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <ambient_light>0.4 0.4 0.45</ambient_light>
+        <background_color>0.05 0.06 0.09</background_color>
+        <camera_pose>4.5 -3.2 2.6 0 0.42 2.35</camera_pose>
+      </plugin>
+      <plugin filename="GzSceneManager" name="Scene Manager"/>
+      <plugin filename="InteractiveViewControl" name="Interactive view control"/>
+      <plugin filename="CameraTracking" name="Camera Tracking"/>
+    </gui>
+
+    <scene>
+      <ambient>0.32 0.33 0.38 1.0</ambient>
+      <background>0.04 0.05 0.08 1.0</background>
+      <shadows>true</shadows>
+      <grid>false</grid>
+      <sky/>
+    </scene>
+
+    <!-- Key directional sun -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>3 -2 8 0 0.8 0.6</pose>
+      <diffuse>1.0 0.97 0.92 1</diffuse>
+      <specular>0.4 0.4 0.4 1</specular>
+      <attenuation>
+        <range>50</range>
+        <constant>0.9</constant>
+        <linear>0.005</linear>
+        <quadratic>0.0001</quadratic>
+      </attenuation>
+      <direction>-0.4 0.3 -1.0</direction>
+    </light>
+    <!-- Rim fill -->
+    <light type="point" name="fill_left">
+      <pose>-2 3 3 0 0 0</pose>
+      <diffuse>0.4 0.5 0.7 1</diffuse>
+      <specular>0.1 0.1 0.2 1</specular>
+      <attenuation>
+        <range>15</range>
+        <constant>0.5</constant>
+        <linear>0.05</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+    <!-- Top key over sensor frame -->
+    <light type="spot" name="sensor_key">
+      <pose>2.0 0 3.5 0 1.4 0</pose>
+      <diffuse>0.9 0.92 1.0 1</diffuse>
+      <specular>0.5 0.5 0.5 1</specular>
+      <attenuation>
+        <range>10</range>
+        <constant>0.5</constant>
+        <linear>0.05</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+      <spot>
+        <inner_angle>0.5</inner_angle>
+        <outer_angle>1.0</outer_angle>
+        <falloff>1.0</falloff>
+      </spot>
+    </light>
+
+    <!-- Floor -->
+    <model name="floor">
+      <static>true</static>
+      <link name="floor_link">
+        <collision name="col">
+          <geometry><plane><normal>0 0 1</normal><size>30 30</size></plane></geometry>
+          <surface>
+            <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          </surface>
+        </collision>
+        <visual name="vis">
+          <geometry><plane><normal>0 0 1</normal><size>30 30</size></plane></geometry>
+          <material>
+            <ambient>0.10 0.11 0.13 1</ambient>
+            <diffuse>0.18 0.19 0.22 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!--
+      BHS Conveyor: 4m × 0.6m × 0.08m belt, top surface at z=0.5.
+      TrackController drives the belt surface; fdir1 perpendicular to motion.
+    -->
+    <model name="bhs_conveyor">
+      <static>false</static>
+      <pose>2.0 0 0.50 0 0 0</pose>
+      <link name="belt">
+        <pose relative_to="__model__">0 0 0 0 0 0</pose>
+        <inertial>
+          <mass>200</mass>
+          <inertia>
+            <ixx>6.0</ixx><ixy>0</ixy><ixz>0</ixz>
+            <iyy>266</iyy><iyz>0</iyz>
+            <izz>270</izz>
+          </inertia>
+        </inertial>
+        <collision name="belt_col">
+          <pose>0 0 0 0 0 0</pose>
+          <geometry><box><size>4.0 0.6 0.08</size></box></geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>0.5</mu>
+                <mu2>150</mu2>
+                <fdir1>0 1 0</fdir1>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="belt_vis">
+          <geometry><box><size>4.0 0.6 0.08</size></box></geometry>
+          <material>
+            <ambient>0.08 0.08 0.10 1</ambient>
+            <diffuse>0.16 0.16 0.18 1</diffuse>
+            <specular>0.5 0.5 0.5 1</specular>
+          </material>
+        </visual>
+      </link>
+
+      <!-- Side rails (kinematic, attached) -->
+      <link name="rail_left">
+        <pose relative_to="belt">0 0.32 0.06 0 0 0</pose>
+        <inertial><mass>5</mass><inertia><ixx>0.5</ixx><iyy>0.5</iyy><izz>0.5</izz></inertia></inertial>
+        <collision name="col"><geometry><box><size>4.0 0.05 0.20</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>4.0 0.05 0.20</size></box></geometry>
+          <material>
+            <ambient>0.30 0.30 0.35 1</ambient>
+            <diffuse>0.55 0.58 0.62 1</diffuse>
+            <specular>0.6 0.6 0.6 1</specular>
+          </material>
+        </visual>
+      </link>
+      <link name="rail_right">
+        <pose relative_to="belt">0 -0.32 0.06 0 0 0</pose>
+        <inertial><mass>5</mass><inertia><ixx>0.5</ixx><iyy>0.5</iyy><izz>0.5</izz></inertia></inertial>
+        <collision name="col"><geometry><box><size>4.0 0.05 0.20</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>4.0 0.05 0.20</size></box></geometry>
+          <material>
+            <ambient>0.30 0.30 0.35 1</ambient>
+            <diffuse>0.55 0.58 0.62 1</diffuse>
+            <specular>0.6 0.6 0.6 1</specular>
+          </material>
+        </visual>
+      </link>
+      <joint name="belt_rail_l_fix" type="fixed">
+        <parent>belt</parent>
+        <child>rail_left</child>
+      </joint>
+      <joint name="belt_rail_r_fix" type="fixed">
+        <parent>belt</parent>
+        <child>rail_right</child>
+      </joint>
+
+      <!-- Support legs -->
+      <link name="leg_a">
+        <pose relative_to="belt">-1.8 0 -0.27 0 0 0</pose>
+        <inertial><mass>5</mass><inertia><ixx>0.5</ixx><iyy>0.5</iyy><izz>0.5</izz></inertia></inertial>
+        <visual name="vis">
+          <geometry><box><size>0.10 0.6 0.50</size></box></geometry>
+          <material><ambient>0.30 0.30 0.35 1</ambient><diffuse>0.55 0.58 0.62 1</diffuse></material>
+        </visual>
+      </link>
+      <link name="leg_b">
+        <pose relative_to="belt">1.8 0 -0.27 0 0 0</pose>
+        <inertial><mass>5</mass><inertia><ixx>0.5</ixx><iyy>0.5</iyy><izz>0.5</izz></inertia></inertial>
+        <visual name="vis">
+          <geometry><box><size>0.10 0.6 0.50</size></box></geometry>
+          <material><ambient>0.30 0.30 0.35 1</ambient><diffuse>0.55 0.58 0.62 1</diffuse></material>
+        </visual>
+      </link>
+      <joint name="belt_leg_a_fix" type="fixed"><parent>belt</parent><child>leg_a</child></joint>
+      <joint name="belt_leg_b_fix" type="fixed"><parent>belt</parent><child>leg_b</child></joint>
+
+      <!-- Pin the conveyor model to the world (no motion) -->
+      <joint name="world_fix" type="fixed">
+        <parent>world</parent>
+        <child>belt</child>
+      </joint>
+
+      <!-- TrackController: surface velocity along X (belt motion) -->
+      <plugin filename="gz-sim-track-controller-system"
+              name="gz::sim::systems::TrackController">
+        <link>belt</link>
+        <odometry_publish_frequency>1</odometry_publish_frequency>
+      </plugin>
+    </model>
+
+    <!-- Sensor frame: arch over conveyor at x=2.0 -->
+    <model name="sensor_frame">
+      <static>true</static>
+      <pose>2.0 0 0 0 0 0</pose>
+      <link name="pillar_left">
+        <pose>0 0.7 1.0 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>0.06 0.06 2.0</size></box></geometry>
+          <material><ambient>0.18 0.22 0.30 1</ambient><diffuse>0.35 0.42 0.55 1</diffuse></material>
+        </visual>
+      </link>
+      <link name="pillar_right">
+        <pose>0 -0.7 1.0 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>0.06 0.06 2.0</size></box></geometry>
+          <material><ambient>0.18 0.22 0.30 1</ambient><diffuse>0.35 0.42 0.55 1</diffuse></material>
+        </visual>
+      </link>
+      <link name="crossbar">
+        <pose>0 0 2.0 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>0.08 1.5 0.08</size></box></geometry>
+          <material><ambient>0.18 0.22 0.30 1</ambient><diffuse>0.35 0.42 0.55 1</diffuse></material>
+        </visual>
+      </link>
+      <link name="sensor_box">
+        <pose>0 0 1.85 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>0.35 0.50 0.12</size></box></geometry>
+          <material>
+            <ambient>0.12 0.18 0.25 1</ambient>
+            <diffuse>0.22 0.30 0.42 1</diffuse>
+            <specular>0.6 0.6 0.7 1</specular>
+          </material>
+        </visual>
+      </link>
+      <link name="lens_rgb_l">
+        <pose>-0.06 -0.18 1.79 0 0 0</pose>
+        <visual name="vis"><geometry><cylinder><radius>0.028</radius><length>0.020</length></cylinder></geometry>
+          <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.08 0.08 0.10 1</diffuse><specular>0.9 0.9 0.9 1</specular></material>
+        </visual>
+      </link>
+      <link name="lens_rgb_r">
+        <pose>-0.06 0.18 1.79 0 0 0</pose>
+        <visual name="vis"><geometry><cylinder><radius>0.028</radius><length>0.020</length></cylinder></geometry>
+          <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.08 0.08 0.10 1</diffuse><specular>0.9 0.9 0.9 1</specular></material>
+        </visual>
+      </link>
+      <link name="lens_pol">
+        <pose>0.10 0 1.79 0 0 0</pose>
+        <visual name="vis"><geometry><cylinder><radius>0.024</radius><length>0.020</length></cylinder></geometry>
+          <material><ambient>0.08 0.10 0.16 1</ambient><diffuse>0.18 0.22 0.36 1</diffuse><specular>0.95 0.95 0.95 1</specular></material>
+        </visual>
+      </link>
+      <link name="ir_ring">
+        <pose>0.0 0 1.78 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>0.18 0.04 0.025</size></box></geometry>
+          <material><ambient>0.30 0.05 0.05 1</ambient><diffuse>0.85 0.10 0.10 1</diffuse><emissive>0.35 0.04 0.04 1</emissive></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Downstream ULD bin -->
+    <model name="uld_ld3">
+      <static>true</static>
+      <pose>4.7 0 0.30 0 0 0</pose>
+      <link name="base">
+        <visual name="vis"><geometry><box><size>1.0 1.0 0.04</size></box></geometry>
+          <material><ambient>0.30 0.30 0.32 1</ambient><diffuse>0.55 0.56 0.60 1</diffuse><specular>0.5 0.5 0.5 1</specular></material></visual>
+        <collision name="col"><geometry><box><size>1.0 1.0 0.04</size></box></geometry></collision>
+      </link>
+      <link name="wall_back">
+        <pose>0.45 0 0.40 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>0.05 1.0 0.85</size></box></geometry>
+          <material><ambient>0.30 0.30 0.32 1</ambient><diffuse>0.55 0.56 0.60 1</diffuse></material></visual>
+        <collision name="col"><geometry><box><size>0.05 1.0 0.85</size></box></geometry></collision>
+      </link>
+      <link name="wall_l">
+        <pose>0 0.475 0.40 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>1.0 0.05 0.85</size></box></geometry>
+          <material><ambient>0.30 0.30 0.32 1</ambient><diffuse>0.55 0.56 0.60 1</diffuse></material></visual>
+        <collision name="col"><geometry><box><size>1.0 0.05 0.85</size></box></geometry></collision>
+      </link>
+      <link name="wall_r">
+        <pose>0 -0.475 0.40 0 0 0</pose>
+        <visual name="vis"><geometry><box><size>1.0 0.05 0.85</size></box></geometry>
+          <material><ambient>0.30 0.30 0.32 1</ambient><diffuse>0.55 0.56 0.60 1</diffuse></material></visual>
+        <collision name="col"><geometry><box><size>1.0 0.05 0.85</size></box></geometry></collision>
+      </link>
+    </model>
+
+    <!-- Cinematic camera for recording (side-3/4 view) -->
+    <model name="cinematic_cam">
+      <static>true</static>
+      <pose>0.2 -2.8 1.55 0 0.18 1.05</pose>
+      <link name="cam_link">
+        <sensor name="cinematic" type="camera">
+          <update_rate>30</update_rate>
+          <camera>
+            <horizontal_fov>1.20</horizontal_fov>
+            <image><width>1920</width><height>1080</height><format>R8G8B8</format></image>
+            <clip><near>0.05</near><far>100</far></clip>
+          </camera>
+          <topic>cinematic</topic>
+          <always_on>true</always_on>
+          <plugin filename="gz-sim-camera-video-recorder-system"
+                  name="gz::sim::systems::CameraVideoRecorder">
+            <service>cinematic/record_video</service>
+            <use_sim_time>true</use_sim_time>
+          </plugin>
+        </sensor>
+      </link>
+    </model>
+
+    <!-- Overhead sensor camera -->
+    <model name="overhead_cam">
+      <static>true</static>
+      <pose>2.0 0 1.65 0 1.5708 0</pose>
+      <link name="cam_link">
+        <sensor name="overhead" type="camera">
+          <update_rate>30</update_rate>
+          <camera>
+            <horizontal_fov>1.05</horizontal_fov>
+            <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
+            <clip><near>0.05</near><far>10</far></clip>
+          </camera>
+          <topic>overhead</topic>
+          <always_on>true</always_on>
+        </sensor>
+      </link>
+    </model>
+
+    <!-- Drive the belt at 0.4167 m/s once at startup -->
+    <plugin filename="gz-sim-triggered-publisher-system"
+            name="gz::sim::systems::TriggeredPublisher">
+      <input type="gz.msgs.Boolean" topic="/dummy_never_fires"/>
+      <output type="gz.msgs.Double" topic="/model/bhs_conveyor/link/belt/track_cmd_vel">
+        data: 0.4167
+      </output>
+    </plugin>
+
+  </world>
+</sdf>

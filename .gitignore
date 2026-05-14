@@ -1,0 +1,16 @@
+# Build / runtime artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp / intermediate frames extracted during iteration
+output/*.png
+output/c*.png
+output/*_*.png
+output/frame_*.png
+
+# Don't commit the LFS-pointer-only STL meshes if they end up here
+**/agilex_piper_arm_description/meshes/
+
+# Log files
+*.log

@@ -1,0 +1,320 @@
+<?xml version="1.0"?>
+<!--
+  Gazebo-ready Piper arm + gripper with gz_ros2_control hooks.
+  All mesh refs use absolute file:// paths so it works without ROS package install.
+-->
+<robot name="piper_gz" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="prefix" default=""/>
+  <xacro:property name="MESH" value="file:///data/nedo/sim/assets/piper_isaac_sim/piper_description/meshes"/>
+
+  <xacro:property name="effort_limit" value="100"/>
+  <xacro:property name="velocity_limit" value="2.5"/>
+
+  <xacro:property name="j1_lo" value="-2.618"/>
+  <xacro:property name="j1_hi" value="2.618"/>
+  <xacro:property name="j2_lo" value="0"/>
+  <xacro:property name="j2_hi" value="3.14"/>
+  <xacro:property name="j3_lo" value="-2.967"/>
+  <xacro:property name="j3_hi" value="0"/>
+  <xacro:property name="j4_lo" value="-1.745"/>
+  <xacro:property name="j4_hi" value="1.745"/>
+  <xacro:property name="j5_lo" value="-1.22"/>
+  <xacro:property name="j5_hi" value="1.22"/>
+  <xacro:property name="j6_lo" value="-2.0944"/>
+  <xacro:property name="j6_hi" value="2.0944"/>
+
+  <xacro:property name="grip_stroke" value="0.04"/>
+
+  <!-- root: pedestal (proxy for Mobile Mover) -->
+  <link name="world"/>
+
+  <link name="pedestal">
+    <inertial>
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <mass value="40"/>
+      <inertia ixx="2.0" ixy="0" ixz="0" iyy="2.0" iyz="0" izz="2.0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.6 0.6 0.5"/>
+      </geometry>
+      <material name="mm_silver">
+        <color rgba="0.55 0.58 0.62 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.6 0.6 0.5"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="world_to_pedestal" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child link="pedestal"/>
+  </joint>
+
+  <!-- Piper base mounted on pedestal top -->
+  <link name="base_link">
+    <inertial>
+      <origin xyz="-0.00473641164191482 2.56829134630247E-05 0.041451518036016" rpy="0 0 0"/>
+      <mass value="1.02"/>
+      <inertia ixx="0.00267433" ixy="-0.00000073" ixz="-0.00017389"
+               iyy="0.00282612" iyz="0.0000004" izz="0.00089624"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="${MESH}/base_link.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material>
+    </visual>
+    <collision>
+      <geometry><mesh filename="${MESH}/base_link.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="pedestal_to_base" type="fixed">
+    <origin xyz="0 0 0.5" rpy="0 0 0"/>
+    <parent link="pedestal"/>
+    <child link="base_link"/>
+  </joint>
+
+  <link name="link1">
+    <inertial>
+      <origin xyz="0.00032 -0.00041 -0.00348" rpy="0 0 0"/>
+      <mass value="0.71"/>
+      <inertia ixx="0.00050027" ixy="0.00000078" ixz="0.00000626"
+               iyy="0.00040879" iyz="0.00000462" izz="0.00045802"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link1.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link1.STL"/></geometry></collision>
+  </link>
+  <joint name="joint1" type="revolute">
+    <origin xyz="0 0 0.123" rpy="0 0 0"/>
+    <parent link="base_link"/><child link="link1"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${j1_lo}" upper="${j1_hi}" effort="${effort_limit}" velocity="${velocity_limit}"/>
+    <dynamics damping="0.5" friction="0.1"/>
+  </joint>
+
+  <link name="link2">
+    <inertial>
+      <origin xyz="0.21852 -0.00861 0.00126" rpy="0 0 0"/>
+      <mass value="1.16"/>
+      <inertia ixx="0.00111915" ixy="0.00182916" ixz="0.00019233"
+               iyy="0.06763251" iyz="0.00000767" izz="0.067559"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link2.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link2.STL"/></geometry></collision>
+  </link>
+  <joint name="joint2" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 -0.1359 -3.1416"/>
+    <parent link="link1"/><child link="link2"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${j2_lo}" upper="${j2_hi}" effort="${effort_limit}" velocity="${velocity_limit}"/>
+    <dynamics damping="0.5" friction="0.1"/>
+  </joint>
+
+  <link name="link3">
+    <inertial>
+      <origin xyz="-0.01999 -0.14808 -0.00053" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="0.01347608" ixy="0.00161034" ixz="0.00000066"
+               iyy="0.00046377" iyz="0.00000162" izz="0.01363321"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link3.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link3.STL"/></geometry></collision>
+  </link>
+  <joint name="joint3" type="revolute">
+    <origin xyz="0.28503 0 0" rpy="0 0 -1.7939"/>
+    <parent link="link2"/><child link="link3"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${j3_lo}" upper="${j3_hi}" effort="${effort_limit}" velocity="${velocity_limit}"/>
+    <dynamics damping="0.5" friction="0.1"/>
+  </joint>
+
+  <link name="link4">
+    <inertial>
+      <origin xyz="0.00013 -0.00076 -0.00394" rpy="0 0 0"/>
+      <mass value="0.38"/>
+      <inertia ixx="0.00017844" ixy="0.00000062" ixz="0.00000067"
+               iyy="0.00018914" iyz="0.00000408" izz="0.00014613"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link4.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link4.STL"/></geometry></collision>
+  </link>
+  <joint name="joint4" type="revolute">
+    <origin xyz="-0.021984 -0.25075 0" rpy="1.5708 0 0"/>
+    <parent link="link3"/><child link="link4"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${j4_lo}" upper="${j4_hi}" effort="${effort_limit}" velocity="${velocity_limit}"/>
+    <dynamics damping="0.3" friction="0.05"/>
+  </joint>
+
+  <link name="link5">
+    <inertial>
+      <origin xyz="0.00018 -0.06104 -0.00227" rpy="0 0 0"/>
+      <mass value="0.39"/>
+      <inertia ixx="0.00172318" ixy="0.00000259" ixz="0.00000010"
+               iyy="0.00017936" iyz="0.00000990" izz="0.00171172"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link5.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link5.STL"/></geometry></collision>
+  </link>
+  <joint name="joint5" type="revolute">
+    <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
+    <parent link="link4"/><child link="link5"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${j5_lo}" upper="${j5_hi}" effort="${effort_limit}" velocity="${velocity_limit}"/>
+    <dynamics damping="0.3" friction="0.05"/>
+  </joint>
+
+  <link name="link6">
+    <inertial>
+      <origin xyz="-0.00003 0.00006 0.04618" rpy="0 0 0"/>
+      <mass value="0.46"/>
+      <inertia ixx="0.00152112" ixy="0.00000202" ixz="0.00000261"
+               iyy="0.00138626" iyz="0.00000002" izz="0.00031152"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link6.STL"/></geometry>
+      <material name="piper_eef"><color rgba="0.90 0.92 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link6.STL"/></geometry></collision>
+  </link>
+  <joint name="joint6" type="revolute">
+    <origin xyz="8.8259E-05 -0.091 0" rpy="1.5708 0 0"/>
+    <parent link="link5"/><child link="link6"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${j6_lo}" upper="${j6_hi}" effort="${effort_limit}" velocity="${velocity_limit}"/>
+    <dynamics damping="0.3" friction="0.05"/>
+  </joint>
+
+  <!-- Gripper base -->
+  <link name="gripper_base">
+    <inertial>
+      <origin xyz="-0.000183807 8.0503e-05 0.0321437" rpy="0 0 0"/>
+      <mass value="0.45"/>
+      <inertia ixx="0.00092934" ixy="0" ixz="0" iyy="0.00071447" iyz="0" izz="0.00039442"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/gripper_base.STL"/></geometry>
+      <material name="piper_body"><color rgba="0.79 0.82 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/gripper_base.STL"/></geometry></collision>
+  </link>
+  <joint name="gripper_fixed" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="link6"/><child link="gripper_base"/>
+  </joint>
+
+  <link name="left_finger">
+    <inertial>
+      <origin xyz="0.00065 -0.0492 0.00972" rpy="0 0 0"/>
+      <mass value="0.025"/>
+      <inertia ixx="0.00007371" ixy="0" ixz="0" iyy="0.0000747" iyz="0" izz="0.0000747"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link7.STL"/></geometry>
+      <material name="piper_eef"><color rgba="0.90 0.92 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link7.STL"/></geometry></collision>
+  </link>
+  <joint name="gripper_left" type="prismatic">
+    <origin xyz="0 0 0.1358" rpy="1.5708 0 0"/>
+    <parent link="gripper_base"/><child link="left_finger"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="${grip_stroke}" effort="20" velocity="1.0"/>
+    <dynamics damping="2.0" friction="0.5"/>
+  </joint>
+
+  <link name="right_finger">
+    <inertial>
+      <origin xyz="0.00065 -0.0492 0.00972" rpy="0 0 0"/>
+      <mass value="0.025"/>
+      <inertia ixx="0.00007371" ixy="0" ixz="0" iyy="0.0000747" iyz="0" izz="0.0000747"/>
+    </inertial>
+    <visual><geometry><mesh filename="${MESH}/link8.STL"/></geometry>
+      <material name="piper_eef"><color rgba="0.90 0.92 0.93 1"/></material></visual>
+    <collision><geometry><mesh filename="${MESH}/link8.STL"/></geometry></collision>
+  </link>
+  <!-- Right finger fixed at open position. Demo grasp uses DetachableJoint,
+       so single-finger animation is enough; avoids ros2_control mimic woes. -->
+  <joint name="gripper_right" type="fixed">
+    <origin xyz="0 0 0.1758" rpy="1.5708 0 -3.1416"/>
+    <parent link="gripper_base"/><child link="right_finger"/>
+  </joint>
+
+  <!-- TCP frame -->
+  <link name="tcp">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+    </inertial>
+  </link>
+  <joint name="tcp_joint" type="fixed">
+    <origin xyz="0 0 0.18" rpy="0 0 0"/>
+    <parent link="gripper_base"/><child link="tcp"/>
+  </joint>
+
+  <!-- ros2_control -->
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <joint name="joint1">
+      <command_interface name="position"><param name="min">${j1_lo}</param><param name="max">${j1_hi}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint2">
+      <command_interface name="position"><param name="min">${j2_lo}</param><param name="max">${j2_hi}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">1.2</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint3">
+      <command_interface name="position"><param name="min">${j3_lo}</param><param name="max">${j3_hi}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">-1.2</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint4">
+      <command_interface name="position"><param name="min">${j4_lo}</param><param name="max">${j4_hi}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint5">
+      <command_interface name="position"><param name="min">${j5_lo}</param><param name="max">${j5_hi}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.6</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint6">
+      <command_interface name="position"><param name="min">${j6_lo}</param><param name="max">${j6_hi}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="gripper_left">
+      <command_interface name="position"><param name="min">0</param><param name="max">${grip_stroke}</param></command_interface>
+      <state_interface name="position"><param name="initial_value">${grip_stroke}</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>/data/nedo/gazebo_sim/config/piper_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+  <!-- Pedestal material -->
+  <gazebo reference="pedestal">
+    <visual>
+      <material>
+        <ambient>0.40 0.42 0.45 1</ambient>
+        <diffuse>0.55 0.58 0.62 1</diffuse>
+        <specular>0.3 0.3 0.3 1</specular>
+      </material>
+    </visual>
+  </gazebo>
+
+</robot>
