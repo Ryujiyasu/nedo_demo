@@ -1,167 +1,238 @@
-# NEDO Challenge — Gazebo Sim デモワークスペース
+# nedo_demo — Mobile Mover Stacker 開発基盤
 
-NEDO Challenge（空港グランドハンドリング）コンテスト1（手荷物識別）／コンテスト3（積付ロボット）提案書の **§g 類似実績** に添付する動画と再現可能なシミュレーション環境。
+NEDO Challenge（空港グランドハンドリング）コンテスト1「手荷物識別」およびコンテスト3「積付ロボット」の **本開発で実利用するシミュレーション・統合基盤**。
 
-Isaac Sim 版（`/data/nedo/sim/`）でも同等のシーンを構築済だが、**ロボット／物体の動きが「キーフレーム＋スクリプテッド表面速度」で人為的に見えた**ため、本ワークスペースで `gz_ros2_control` の `JointTrajectoryController` と `TrackController` プラグインによる **物理駆動版** を別途構築した。Isaac 版の写実的レンダと、本 Gazebo 版の物理リアリズム＋ROS2 統合実装証拠を **相補的に提示** する設計。
+ROS 2 Jazzy + Gazebo Sim 8 (gz-sim) 上に、
 
-提案者：**安河内**（株式会社エムスクエア・ラボ CTO、本コンテスト個人応募代表者）
+- 25 m/min 連続走行 BHS コンベア
+- マルチモーダル識別装置「Argus」のシーン上モック
+- AgileX PiPER 6軸協働アーム＋Mobile Mover 移動マニピュレータの URDF
+- `ros2_control` を介した実物理関節軌道制御
+- 識別結果ライブ可視化 HUD パイプライン
+
+をすべて再現可能な形で実装している。本リポジトリはコンテスト採択後の Stage1 開発期間（2026/7〜2027/2）にそのまま開発リポジトリとして拡張する。
+
+代表：**安河内**（株式会社エムスクエア・ラボ CTO）／ 個人応募
+
+リポジトリ: https://github.com/Ryujiyasu/nedo_demo
 
 ---
 
-## 1. このリポジトリで示すこと
+## 1. 提供する開発基盤
 
-| 項目 | 提案書での主張 | 本リポジトリで示す根拠 |
-|---|---|---|
-| ROS2 + Gazebo 物理シミュ実装力 | コンテスト1 §g, コンテスト3 §g | `urdf/`, `worlds/`, `launch/`, `config/` 全部実機ビルド可能で、`scripts/run_*.sh` が一発で起動 |
-| AgileX PiPER 6軸協働アーム 実機/シム統合 | コンテスト3 §a, §g | `urdf/piper_gz.urdf.xacro` + `gz_ros2_control` + `JointTrajectoryController` で実物理駆動。実機いちご収穫の Isaac 再現と同型 |
-| BHS 25 m/min 動体下マルチモーダル識別 | コンテスト1 §c, §g | `worlds/bhs_contest1.sdf` + `TrackController` で belt 表面速度 0.4167 m/s。`bhs_annotator.py` が Argus 風 HUD で分類・素材・寸法・DB照合スコアをライブ表示 |
-| 4分類×7素材×寸法5mm 識別パイプライン | コンテスト1 別紙1 §3.1 | `bag_spawner.py` の `BAG_TYPES`（10 種, 4-class×7-material のサンプル）と `classify()` 関数, `bhs_annotator.py` の検出フィード |
-| QUBO ベース積付・順序最適化 | コンテスト3 §a, §f | 本リポジトリでは未実装 (NEDO Q-2 Niobi で実装済の QUBO 基盤を流用する。コンテスト3 開発期間で連携) |
+| レイヤ | 内容 | 本リポジトリ上の実装 | Stage1/2 で拡張する点 |
+|---|---|---|---|
+| シミュレーション環境 | BHS / メイクエリア / ULD / Mobile Mover / 協働アーム の物理シーン | `worlds/bhs_contest1.sdf`, `worlds/pickplace_contest3.sdf` | 佐賀空港試験ラインの実測値で寸法・配置を校正、LD3-AKE 実寸 ULD、多 ULD 並列 |
+| ロボット記述 | AgileX PiPER 6DoF + gripper + Mobile Mover ベース | `urdf/piper_gz.urdf.xacro`（`ros2_control` ハードウェアインタフェース付き） | Mobile Mover 完全 URDF 統合、22kg 級ヘビーデューティアーム（AUBO i20 / 安川 GP12 候補）への乗せ替え、マルチモーダルエンドエフェクタ |
+| 動作制御 | `joint_trajectory_controller` による関節空間トラジェクトリ実行 | `config/piper_controllers.yaml`, `scripts/pickplace_controller.py` | MoveIt 2 統合（OMPL / CHOMP）、BehaviorTree によるエラーリカバリ、Cartesian path planning |
+| 識別 | コンベア上 bag の 4分類 × 7素材 × 寸法計測 のシーン上模擬 | `scripts/bag_spawner.py`（procedural bag 生成、`classify()` で分類タグ付与） | 実機推論パイプライン（YOLO + DINOv2 embedding + 世界手荷物寸法 DB）を本シーンで合成データ学習・評価する |
+| 積付計算 | （Stage1 で QUBO 統合予定） | — | NEDO Challenge Q-2「Niobi」で実装済の QUBO ソルバを ULD 内配置・順序決定に転用 |
+| 可視化／録画 | Argus 風 HUD（識別フィード）と Pick & Place HUD を OpenCV で重畳しつつ録画 | `scripts/bhs_annotator.py`, `scripts/pickplace_annotator.py`, `scripts/record_video.py` | HUD を実機運用時のオペレータ画面（Web UI）にそのまま転用 |
+| 学習データ生成 | Domain Randomization 用シーン | Isaac Sim 側（別レポ `/data/nedo/sim/`）で並列構築 | 物理リアリズム検証は本 Gazebo 側、レンダ品質は Isaac 側、それぞれ DR 対応 |
 
 ---
 
 ## 2. 動画成果物
 
-### 2.1 メイン: コンテスト1 BHS 識別デモ
+提案書 §g（類似実績）に添付する動画。提案書 PDF からは GitHub Releases リンクおよび YouTube 限定公開 URL の双方を参照する。
+
+### 2.1 コンテスト1 — Argus BHS 識別パイプライン
 
 **`output/contest1_bhs_1080p.mp4`** — 1920×1080 / H.264 / 50 秒 / 7.3 MB
 
-BHS コンベア（4m × 0.6m、25 m/min = 0.4167 m/s）上を、10 種の bag が連続的に流れる絵に、Argus 風スキャナ HUD を重畳：
+BHS コンベア（4 m × 0.6 m、25 m/min = 0.4167 m/s 連続走行）上を、4分類 × 7素材 をカバーする 10 種類の手荷物プロシージャル生成サンプルが流れる。識別装置（架台＋RGB ステレオ × 2 ＋ 偏光 × 1 ＋ Active IR projector）直下を通過する各 bag に対し、Argus HUD が以下をライブ出力：
 
-- **左上ヘッダ**: スキャナ識別子（"ARGUS BHS SCANNER"）、センサ構成（RGBステレオ + 偏光 + Active IR）、BHS 速度
-- **右上ステータス**: システム状態、経過時間
-- **センサーフレーム下に動的バウンディングボックス**（"SCAN ZONE"）
-- **検出コールアウト**（bag が SCAN ZONE 通過時に大きく表示）:
-  - 個体 ID、4分類（H/HX/S/SX）、7素材（PLA/MET/FAB/LEA/MIX/VIN/PAP）
-  - 包絡直方体寸法（mm 単位）
-  - 世界手荷物寸法 DB の照合ブランド（Samsonite Cosmolite, Rimowa, Tumi 等）
-  - 照合スコア、推定質量
-- **左下ローリングフィード**: 直近5件の検出履歴
+- 個体 ID
+- 4分類（H / HX / S / SX）
+- 7素材（PLA / MET / FAB / LEA / VIN / PAP / MIX）
+- 包絡直方体寸法（mm 単位）
+- 世界手荷物寸法 DB の照合ブランド名（Samsonite / Rimowa / Tumi / Travelpro / Briggs & Riley 等）
+- 照合スコア
+- 推定質量
+- 直近 5 件の検出履歴ローリングフィード（BHS PLC / BSM 出力相当）
 
-実物理エンジン（DART + ODE collision）で belt 表面速度を bag に伝達。bag は剛体物体として摩擦力で押されるため、キャッチアップ・スリップ・停止／加速の挙動が現実的。
+ベルト挙動は `gz-sim-track-controller-system` プラグインによる表面摩擦駆動（ODE friction direction、mu2 = 150、fdir1 = 0 1 0）。bag は剛体物理シミュレーションで押されるため、停止・加速・スリップ挙動がそのまま再現される。HUD は `bhs_annotator.py` が `/cinematic` トピックを購読し、OpenCV で重畳した上で `/cinematic_annotated` として再パブリッシュ、`record_video.py` が H.264 fragmented mp4 として書き出している。
 
-### 2.2 おまけ: コンテスト3 Pick & Place スケルトン
+### 2.2 コンテスト3 — Mobile Mover Stacker Pick & Place
 
 **`output/contest3_pickplace_1080p.mp4`** — 1920×1080 / H.264 / 25 秒 / 2.4 MB
 
-AgileX PiPER 6 軸協働アーム + Mobile Mover proxy pedestal + 短尺コンベア + ULD-LD3 風 bin。4 サイクル分の Pick & Place を `joint_trajectory_controller` で実物理駆動：
+AgileX PiPER 6 軸協働アーム + Mobile Mover proxy pedestal + 短尺 BHS 出口コンベア + ULD-LD3 風 bin の 4 サイクル積付動作：
 
 ```
-HOME → PREGRASP_OVER_BELT → GRASP_AT_BELT → 
-  SPAWN+ATTACH (DetachableJoint at link6) → 
-LIFT_FROM_BELT → PREPLACE_OVER_ULD → PLACE_INTO_ULD → 
-  DETACH (bag drops into ULD) → 
-LIFT_FROM_ULD → HOME → (repeat)
+HOME → PREGRASP_OVER_BELT → GRASP_AT_BELT → SPAWN+ATTACH
+       → LIFT_FROM_BELT → PREPLACE_OVER_ULD → PLACE_INTO_ULD
+       → DETACH → LIFT_FROM_ULD → HOME → ...
 ```
 
-`pickplace_annotator.py` が "MOBILE MOVER STACKER" HUD を重畳し、サイクル進捗・現在 bag 種別・Phase・ULD 充填台帳を表示。bag は PiPER のグリッパストローク（4 cm）に合わせて **10 cm キューブ** とした（22-32 kg 級フルサイズは Stage2 のヘビーデューティアームで実装）。
+各サイクルで `joint_trajectory_controller` がアームを目標関節姿勢へ滑らかに駆動し（`gz_ros2_control` の `GazeboSimSystem` ハードウェアインタフェース経由）、`gz-sim-detachable-joint-system` がグリッパ wrist (`link6`) と bag 剛体を物理的に剛結合する。Stacker HUD はサイクル進捗・現在 bag 種別・Phase・ULD 充填台帳（積み済み bag リスト + 累積質量）を表示する。
 
-**位置付け**: この動画はあくまで「Mobile Mover + PiPER の ros2_control パイプラインが動くこと」のスケルトン実証。提案書 §g の主要根拠は別途、株式会社エムスクエア・ラボ社内で完成済みの **実機いちご・トマト自律収穫 End-to-End** (申請メンバー Sandesh Athawale 実装、ROS 2 Jazzy + AgileX PiPER + RealSense + YOLO + MoveIt 2) であり、本シムは Stage1 開発開始時点でのシーン設計の出発点として位置づけている。
+本デモの bag サイズは PiPER の 4 cm グリッパストロークに合わせた 10 cm キューブ。実機 22-32 kg 級フルサイズ手荷物への対応は Stage2 で 22 kg 級アーム（AUBO i20 / 安川 GP12 等）への乗せ替えと、マルチモーダルエンドエフェクタ（吸着・すくい上げ・取っ手把持）の実装によって達成する。同種の Pick & Place End-to-End 動作は申請メンバーが株式会社エムスクエア・ラボ社内で AgileX PiPER 実機 + Orbbec/RealSense 深度カメラ + YOLO + MoveIt 2 にて、果実（イチゴ・トマト）の自律検出 → 把持 → 配置で既に達成済みであり、コンテスト3 の Pick & Place 中核技術と完全同型。
 
 ---
 
 ## 3. アーキテクチャ
 
-### 3.1 シミュレーションスタック
-
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ ROS 2 Jazzy                                                     │
-│                                                                 │
-│  ┌──────────────────┐  ┌────────────────┐  ┌──────────────┐    │
-│  │ pickplace_       │  │ bag_spawner.py │  │ {bhs,pp}_    │    │
-│  │ controller.py    │  │ (BHS only)     │  │ annotator.py │    │
-│  │ (Contest3 only)  │  │                │  │              │    │
-│  │ - arm trajectory │  │ - drives belt  │  │ - OpenCV HUD │    │
-│  │ - bag spawn      │  │ - spawns bags  │  │ - JSONL feed │    │
-│  │ - detach trigger │  │   + events     │  │ - re-pub img │    │
-│  └────────┬─────────┘  └────────┬───────┘  └──────┬───────┘    │
-│           │  /arm_controller/   │ gz service       │            │
-│           │  joint_trajectory   │ /world/.../create│            │
-│           ▼                     ▼                  │            │
-│  ┌──────────────────────────────────────────┐     │            │
-│  │ controller_manager (gz_ros2_control)     │     │            │
-│  │  - JointTrajectoryController × 2         │     │            │
-│  │  - JointStateBroadcaster                 │     │            │
-│  └────────────────┬─────────────────────────┘     │            │
-│                   │                                │            │
-│  ┌────────────────▼─────────────────┐  ┌──────────▼─────────┐  │
-│  │ gz_ros2_control system plugin    │  │ ros_gz_image       │  │
-│  │ (embedded in gz sim process)     │  │ /cinematic →       │  │
-│  │  - reads URDF <ros2_control>     │  │ sensor_msgs/Image  │  │
-│  │  - exposes hardware interfaces   │  └──────────┬─────────┘  │
-│  └────────────────┬─────────────────┘             │            │
-└────────────────────┼───────────────────────────────┼────────────┘
-                     │ gz transport                   │
-                     ▼                                │
-┌─────────────────────────────────────────────────────┼────────────┐
-│ Gazebo Sim 8.11 (gz-sim)                            │            │
-│                                                     │            │
-│  Physics (DART + ODE collision) ◀─ TrackController  │            │
-│                                  ◀─ DetachableJoint │            │
-│                                  ◀─ Sensors (Ogre2) │            │
-│                                                     │            │
-│  World: bhs_world / pickplace_world                 │            │
-│     ├ ground, conveyor (kinematic, surface vel)     │            │
-│     ├ piper model (URDF→SDF, 6DoF + gripper)        │            │
-│     ├ uld_ld3 (static walls + base)                 │            │
-│     ├ bags (dynamic, spawned at runtime)            │            │
-│     └ cinematic camera ─────────────────────────────┘            │
+┌──────────────────────────────────────────────────────────────────┐
+│ ROS 2 Jazzy                                                      │
 │                                                                  │
-└──────────────────────────────────────────────────────────────────┘
-                     │
-                     ▼ /cinematic_annotated
-              ┌──────────────────┐
-              │ record_video.py  │ → ffmpeg → fragmented .mp4
-              │ (ROS Image →     │
-              │  raw RGB stdin)  │
-              └──────────────────┘
+│  ┌─────────────────┐  ┌────────────────┐  ┌──────────────────┐   │
+│  │ pickplace_      │  │ bag_spawner    │  │ {bhs,pp}_        │   │
+│  │ controller.py   │  │                │  │ annotator.py     │   │
+│  │ ・arm trajectory│  │ ・belt drive   │  │ ・Argus HUD      │   │
+│  │ ・bag spawn     │  │ ・bag generate │  │ ・event ingest   │   │
+│  │ ・attach/detach │  │ ・event emit   │  │ ・OpenCV overlay │   │
+│  └────────┬────────┘  └────────┬───────┘  └────────┬─────────┘   │
+│           │ /arm_controller/   │ gz service        │             │
+│           │ joint_trajectory   │ /world/.../create │             │
+│           ▼                    ▼                   │             │
+│  ┌────────────────────────────────────────┐       │             │
+│  │ controller_manager (gz_ros2_control)   │       │             │
+│  │  ・JointTrajectoryController × 2       │       │             │
+│  │  ・JointStateBroadcaster               │       │             │
+│  └────────────────┬───────────────────────┘       │             │
+│                   │                                │             │
+│  ┌────────────────▼────────────────┐  ┌────────────▼─────────┐  │
+│  │ gz_ros2_control system plugin   │  │ ros_gz_image bridge   │  │
+│  │ (embedded inside gz sim)        │  │ /cinematic →          │  │
+│  │ ・reads URDF <ros2_control>     │  │ sensor_msgs/Image     │  │
+│  └────────────────┬────────────────┘  └────────────┬──────────┘  │
+└───────────────────┼─────────────────────────────────┼─────────────┘
+                    │ gz transport                    │
+                    ▼                                 │
+┌──────────────────────────────────────────────────────┼────────────┐
+│ Gazebo Sim 8.11                                      │            │
+│                                                      │            │
+│ Physics (DART + ODE) ◀ TrackController plugin        │            │
+│                       ◀ DetachableJoint plugin       │            │
+│                       ◀ Sensors plugin (Ogre2)       │            │
+│                                                      │            │
+│ Worlds:                                              │            │
+│   ・bhs_world (Argus 識別ライン)                      │            │
+│   ・pickplace_world (Mobile Mover Stacker)            │            │
+│                                                      │            │
+│ Models:                                              │            │
+│   ・piper (PiPER 6DoF + gripper + MM pedestal)        │            │
+│   ・bhs_conveyor (kinematic belt + side rails)        │            │
+│   ・sensor_frame (RGB stereo + Pol + IR projector)    │            │
+│   ・uld_ld3 (ULD container shell)                     │            │
+│   ・bags (dynamic, runtime-spawned)                   │            │
+│   ・cinematic_cam (sensor → ROS image) ──────────────┘            │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+                    │
+                    ▼ /cinematic_annotated
+             ┌──────────────────┐
+             │ record_video.py  │ → ffmpeg → fragmented mp4
+             │ /cinematic_ann → │   (frag_keyframe+empty_moov、
+             │ raw RGB pipe     │    途中切断にも耐える）
+             └──────────────────┘
 ```
 
-### 3.2 主要技術判断と理由
+主要な技術判断:
 
-| 課題 | 採用解 | 棄却した代替 | 理由 |
-|---|---|---|---|
-| ベルト上 bag 移動 | `gz-sim-track-controller-system` プラグイン | (a) bag に直接 set_velocity / (b) kinematic pose-sync / (c) PhysxSurfaceVelocity（Isaac） | (a) はサブプロセス overhead で 100ms/call、30Hz update 不可。(b) は物理跳ね返り無し、不自然。Track plugin は belt 表面に ODE friction direction (mu2=150, fdir1=0 1 0) を持たせて bag を物理的に押す。**Isaac の "canned" 感を解消する核** |
-| 動画書き出し | `record_video.py` （ROS bridge → ffmpeg pipe → fragmented mp4） | gz CameraVideoRecorder system plugin | gz 内蔵レコーダは強制終了時に moov atom が未確定で再生不可になる事故が頻発。fragmented mp4 (`+frag_keyframe+empty_moov+default_base_moof`) なら途中切れても再生可。さらにフレーム流れる経路を ROS 化することで `bhs_annotator.py` の重畳が同経路で済む |
-| グリッパ把持 | `gz-sim-detachable-joint-system`（bag 側に plugin、`child_link=link6`） | (a) 摩擦のみで把持 / (b) 吸着面シミュ | PiPER グリッパ 4 cm ストローク × 10 cm bag では摩擦のみだと滑り出す。DetachableJoint で確実に bag を `link6` 子リンクに剛体接続。URDF→SDF 変換で fixed joint がコラプスされ `gripper_base` が消滅するため、attach 先は `link6` |
-| URDF mimic joint | `gripper_right` を fixed joint 化 | URDF `<mimic>` + ros2_control hardware interface | ROS Jazzy の `gz_ros2_control` は mimic 制約付き joint に command_interface が割り当てられると `std::runtime_error("Activated mimic joints cannot have command interfaces")` で異常終了。DetachableJoint で把持を解決するため、右指はビジュアル固定で問題なし |
-| 動画 HUD | OpenCV + JSONL イベントストリーム | (a) gz-sim GUI overlay / (b) ffmpeg drawtext | (a) は GUI 必要、ヘッドレス録画不可。(b) はテキストフィルタチェイン地獄になる。Python ROS ノードで `/cinematic` を購読 → OpenCV 描画 → `/cinematic_annotated` を再パブリッシュ → 録画 が拡張容易 |
-| Python ROS2 init | `rclpy.init(signal_handler_options=SignalHandlerOptions.NO)` | デフォルト | controller / annotator から `subprocess.run(["gz", ...])` を呼ぶと SIGINT が伝搬し rclpy が即 shutdown → publisher context invalid。No-signals init で完全に切り離す |
-
-### 3.3 アセット選定
-
-| アセット | 採用パス | 注意点 |
+| 課題 | 採用解 | 棄却した代替と理由 |
 |---|---|---|
-| AgileX PiPER ビジュアル | `/data/nedo/sim/assets/piper_isaac_sim/piper_description/meshes/*.STL` (binary) | 同名の `agilex_piper_arm_description/meshes/*.STL` は Git LFS ポインタファイルしか無く、Gazebo が ODE assertion で死ぬ |
-| Piper xacro マクロ | `urdf/piper_gz.urdf.xacro`（本リポジトリ） | 既存 `agilex_piper_arm_description/urdf/*.xacro` を参考に、`gz_ros2_control` 用 `<ros2_control>` ブロック・絶対パスメッシュ参照・mimic joint 回避を施した独自版 |
-| Mobile Mover | `urdf/piper_gz.urdf.xacro` 内の 0.6×0.6×0.5 m silver pedestal proxy | `/data/nedo/sim/assets/mm_urdf/mobile_mover.urdf` は FBX メッシュ参照（Gazebo 非対応）。Stage1 開発期間で DAE 変換予定 |
-| ULD コンテナ | `worlds/*.sdf` 内に SDF プリミティブで構築（base + 3 walls） | LD3-AKE 実寸（1.562×1.534×1.626 m）は Contest3 §a で参照、本デモは PiPER リーチ 626 mm に合わせて 0.7×0.7×0.5 m に縮小 |
+| BHS ベルト上 bag 駆動 | `gz-sim-track-controller-system` で ODE 摩擦方向（mu2 = 150、fdir1 = 0 1 0）に表面速度コマンドを与える | (a) bag 個別の `set_velocity` サブプロセス呼出 — 30Hz update 不可、(b) kinematic pose-sync — 物理衝突が反映されない |
+| グリッパ把持 | bag SDF 側の `gz-sim-detachable-joint-system` プラグインで wrist link (`link6`) と bag body を剛体接続。spawn 位置は `gz model -m piper` の link6 ワールド姿勢クエリで動的決定 | 摩擦のみによる物理把持 — PiPER 4 cm ストロークでは滑り出す。`gripper_base` は URDF→SDF 変換時の fixed-joint コラプスで消滅する |
+| URDF mimic joint | `gripper_right` を fixed joint 化。把持は DetachableJoint で代替 | URDF `<mimic>` を残すと `gz_ros2_control` が "Activated mimic joints cannot have command interfaces" で起動失敗 |
+| 動画録画 | `record_video.py`（ROS Image → ffmpeg pipe）で `-movflags +frag_keyframe+empty_moov+default_base_moof` の fragmented mp4 を出力 | gz-sim 内蔵 `CameraVideoRecorder` プラグイン — 強制終了時に moov atom が未確定で再生不可になる事故が頻発 |
+| HUD 重畳 | OpenCV ノード（JSONL イベント購読）が `/cinematic` → `/cinematic_annotated` を再配信 | (a) gz-sim GUI overlay — ヘッドレス録画不可、(b) ffmpeg drawtext — 動的レイアウト対応不可 |
+| rclpy + subprocess 干渉 | `rclpy.init(signal_handler_options=SignalHandlerOptions.NO)` | デフォルト init は `subprocess.run(["gz", ...])` の SIGINT 伝搬で context が即 invalid になる |
 
 ---
 
-## 4. レイアウト
+## 4. 識別アルゴリズムの開発スタックとの接続
+
+本リポジトリは識別装置（Argus）のシーン上モックを提供する。実機推論パイプラインとの接続は以下の経路で行う:
 
 ```
-gazebo_sim/
-├── README.md                     ← このファイル
+                    ┌──────────────────────────┐
+                    │ Argus 学習データ生成      │
+                    │ （Isaac Sim DR + 本 Gz   │
+                    │   側物理リアリズム検証）  │
+                    └────────┬─────────────────┘
+                             │ synthetic RGB / depth / seg / bbox
+                             ▼
+                    ┌──────────────────────────┐
+                    │ YOLO + DINOv2 embedding  │ ◀── 既に実機で
+                    │ + 世界手荷物寸法 DB 検索  │      End-to-End
+                    └────────┬─────────────────┘      動作確認済
+                             │ (label, dims, sku_match)
+                             ▼
+              ┌──────────────────────────────────────┐
+              │ ROS2 トピック /argus/detection (実機) │
+              │ もしくは /tmp/bag_events.jsonl (シム)  │
+              └────────┬─────────────────────────────┘
+                       │
+                       ▼
+              ┌──────────────────────────────┐
+              │ bhs_annotator.py / 実機 HMI  │
+              │ → BHS PLC 連携 → BSM 出力    │
+              └──────────────────────────────┘
+```
+
+本リポジトリ内では bag spawn と同時に `classify()` 関数が分類タグを JSONL イベントとして出力する模擬実装になっている。実機推論パイプラインを差し込む箇所は `bag_events.jsonl` の入力経路 1 箇所のみで、`bhs_annotator.py` 以下の HUD・記録系は変更なく動作する。
+
+---
+
+## 5. 積付アルゴリズム（QUBO）統合計画
+
+NEDO Challenge Q-2 で実装済の QUBO 基盤を本リポジトリの Pick & Place 系に統合する。
+
+```
+   識別装置出力（bag 種別 + 寸法 + 質量）
+         │
+         ▼
+   ┌──────────────────────────┐
+   │ QUBO 定式化               │ ◀── Niobi で実装済
+   │ ・配置位置 (x, y, z)     │
+   │ ・配置順序                │
+   │ ・回転（向き）            │
+   │ Constraints:              │
+   │   ・荷重制約              │
+   │   ・重心制約              │
+   │   ・破損防止 (柔/硬上下)  │
+   │   ・取っ手・タグ向き       │
+   └─────────┬────────────────┘
+             │ Annealing
+             ▼
+   ┌──────────────────────────┐
+   │ 配置プラン                │
+   │ → pickplace_controller.py│
+   │   ・arm waypoints        │
+   │   ・detach position      │
+   │ → MM 群協調 (Stage2)     │
+   └──────────────────────────┘
+```
+
+Stage1 では単機 Mobile Mover + 単 ULD で QUBO 結果を実シーン上に配置（充填率・荷崩れ評価）、Stage2 で多機 MM × 多 ULD の並列最適化に拡張する。
+
+---
+
+## 6. レイアウト
+
+```
+nedo_demo/
+├── README.md
 ├── worlds/
-│   ├── bhs_contest1.sdf          BHS コンベア + センサーアーチ + ULD + 照明 + cinematic cam
-│   └── pickplace_contest3.sdf    PiPER 設置スペース + 短尺コンベア + ULD + 照明 + cinematic cam
+│   ├── bhs_contest1.sdf           Argus BHS シーン（コンベア + センサーアーチ + ULD + 照明 + cinematic cam）
+│   └── pickplace_contest3.sdf     Mobile Mover Stacker シーン（PiPER 設置 + 短尺コンベア + ULD + 照明 + cinematic cam）
 ├── urdf/
-│   └── piper_gz.urdf.xacro       PiPER 6DoF + gripper + pedestal proxy + ros2_control
+│   └── piper_gz.urdf.xacro        PiPER 6DoF + gripper + Mobile Mover proxy pedestal + ros2_control HW IF
 ├── config/
-│   └── piper_controllers.yaml    arm_controller / gripper_controller (JointTrajectoryController)
+│   └── piper_controllers.yaml     arm_controller / gripper_controller（いずれも JointTrajectoryController）
 ├── launch/
-│   └── pickplace_contest3.launch.py  gz sim + xacro 展開 + robot_state_publisher + bridge + spawner
+│   └── pickplace_contest3.launch.py  gz sim 起動 + xacro 展開 + robot_state_publisher + bridge + controllers spawn
 ├── scripts/
-│   ├── bag_spawner.py            BHS bag 投入 + belt 駆動 + 検出イベント JSONL 出力
-│   ├── bhs_annotator.py          /cinematic 購読 → HUD 重畳 → /cinematic_annotated 配信
-│   ├── pickplace_controller.py   PiPER pick-place サイクル + bag spawn/attach/detach
-│   ├── pickplace_annotator.py    Pick&Place HUD（cycle/phase/ledger）
-│   ├── record_video.py           /cinematic_annotated → ffmpeg → fragmented mp4
-│   ├── run_bhs_demo.sh           Contest1 一発ラン (DUR_S=60 で 50s 動画)
-│   └── run_pickplace_demo.sh     Contest3 一発ラン (CYCLES=4 REC_DUR_S=140)
+│   ├── bag_spawner.py             BHS bag 投入 + belt 駆動 + 識別イベント JSONL 出力
+│   ├── bhs_annotator.py           Argus HUD ノード（/cinematic → /cinematic_annotated）
+│   ├── pickplace_controller.py    PiPER Pick & Place サイクル + bag spawn / attach / detach
+│   ├── pickplace_annotator.py     Stacker HUD ノード（cycle / phase / ledger）
+│   ├── record_video.py            /cinematic_annotated → ffmpeg → fragmented mp4
+│   ├── run_bhs_demo.sh            コンテスト1 一発ラン
+│   └── run_pickplace_demo.sh      コンテスト3 一発ラン
 └── output/
     ├── contest1_bhs_1080p.mp4
     └── contest3_pickplace_1080p.mp4
@@ -169,67 +240,64 @@ gazebo_sim/
 
 ---
 
-## 5. 再現方法
+## 7. 実行
 
-### 5.1 依存
+### 依存
 
-- Ubuntu 24.04 (Noble) 想定
-- ROS 2 Jazzy（`/opt/ros/jazzy/setup.bash`）
+- Ubuntu 24.04 (Noble)
+- ROS 2 Jazzy
 - Gazebo Sim 8.11（`gz-sim-vendor`）
 - `gz_ros2_control`, `ros_gz_bridge`, `ros_gz_image`, `ros_gz_sim`
 - `joint_state_broadcaster`, `joint_trajectory_controller`
 - `xacro`, `robot_state_publisher`
-- Python 3.12 with `opencv-python`, `numpy`, `python-docx`（提案書編集用）
+- Python 3.12, `opencv-python`, `numpy`, `python-docx`
 - `ffmpeg` 6+
-- NVIDIA GPU + ドライバ（Ogre2 EGL レンダリング用）
+- NVIDIA GPU + ドライバ（センサー Ogre2 EGL レンダリング）
 
-### 5.2 実行
+### 動かす
 
 ```bash
-# Contest 1（BHS）
+source /opt/ros/jazzy/setup.bash
+export DISPLAY=:0   # アクティブな X セッション or Xvfb
+
+# コンテスト1（BHS 識別ライン）
 DUR_S=60 bash scripts/run_bhs_demo.sh
 # → output/contest1_bhs_1080p.mp4
 
-# Contest 3（Pick & Place）
+# コンテスト3（Mobile Mover Stacker）
 CYCLES=4 REC_DUR_S=140 bash scripts/run_pickplace_demo.sh
 # → output/contest3_pickplace_1080p.mp4
 ```
 
-`DISPLAY=:0` がアクティブな X セッション（または Xvfb）に向いている必要あり（センサー（カメラ）レンダリング用）。
-
 ---
 
-## 6. 既知の限界と Stage1/2 への持ち越し
+## 8. Stage1 開発計画上の役割
 
-| 項目 | 現状（本リポジトリ） | Stage1/2 で解決 |
+| 期間 | マイルストーン | 本リポジトリの位置付け |
 |---|---|---|
-| Mobile Mover 本体表現 | 単純シルバー pedestal | `mobile_mover.urdf` の FBX → DAE 変換、URDF を完全に統合 |
-| ULD サイズ | 0.7×0.7×0.5 m（PiPER リーチに合わせて縮小） | LD3-AKE 実寸（1.562×1.534×1.626 m）、ULD 種別パラメタライズ |
-| Bag サイズ | 10 cm キューブ（PiPER 把持上限） | 22-32 kg 実寸 bag、ハードシェル/ソフト/異形対応 |
-| エンドエフェクタ | 単純 2 指グリッパ + DetachableJoint | **吸着・すくい上げ・取っ手把持の3方式マルチモーダル**（識別装置出力に応じて選択、コンテスト1 と統合運用） |
-| QUBO 積付計算 | 未統合 | NEDO Q-2 Niobi で実装済の QUBO 基盤を流用、ULD 内配置・順序決定を計算 |
-| 多 ULD 並列 / MM 群協調 | 単機・単 ULD | Stage1 で 2機構成、Stage2 で 4-5機並列 |
-| BHS 識別の実機推論連携 | HUD は模擬出力（spawn 時にラベル付け） | Sandesh の YOLO + DINOv2 embedding + DB 検索パイプライン（既に実機いちご収穫で End-to-End 動作）を bag タスクへ転用 |
-| Isaac Sim 連携 | 別レポ（`/data/nedo/sim/`） | Domain Randomization 学習データ生成は Isaac 側、ROS2 統合・物理リアリズムは本 Gazebo 側で並列運用 |
+| 2026/7 | Mobile Mover 自宅持込・動作確認、識別装置（カメラ調達） | 本リポジトリの URDF / world を実機キャリブレーション値で更新 |
+| 2026/8 | AgileX PiPER 統合、Stage1 用識別装置構築開始 | `pickplace_controller.py` から MoveIt 2 経由のプランニングへ昇格 |
+| 2026/9 | Isaac Sim メイクエリア／ULD シーン拡張 + Contest 1 シミュ統合 | Argus 推論モデルの合成学習データ生成と本 Gazebo 側の物理リアリズム検証を並列運用 |
+| 2026/10 | Pick & Place 軽量 bag 実証、QUBO 配置計算統合 | QUBO 出力を `pickplace_controller.py` の waypoint シーケンスに直接接続 |
+| 2026/11 | 多 ULD 並列、エラーリカバリ、シミュレーション結果まとめ | MM 群協調制御を本ワールド上で先行検証 |
+| 2026/12 | 中間成果物の動画・データセット完成 | 本リポジトリの mp4 / 配置データを成果報告書添付として提出 |
+| 2027/1〜2 | 開発成果報告書作成、Stage1 提出 | Stage2 計画書から本リポジトリの拡張ロードマップを引用 |
 
 ---
 
-## 7. 関連リソース
+## 9. 関連リソース
 
-- 申請メンバー実機実証動画（株式会社エムスクエア・ラボ社内）: AgileX PiPER + RealSense + YOLO + MoveIt 2 で果実（イチゴ・トマト）自律検出→把持→配置 End-to-End。Contest 1 識別 + Contest 3 把持の中核技術と完全同型。提案書 §g にて YouTube 限定公開 URL を別途記載。
-- NEDO Challenge Q-2 Niobi（QUBO 医療臓器マッチング）: 2026/6 成果報告予定。Contest 3 積付計算と技術構造同型。
-- 暗号 OSS hyde（TPM + ML-KEM-768）: crates.io 公開。Mobile Mover 群協調の安全通信層の素材。
-
----
-
-## 8. ライセンス
-
-本リポジトリ内のコード（`scripts/`, `worlds/`, `urdf/`, `launch/`, `config/`）は MIT License とする。
-
-外部アセット：
-- AgileX PiPER メッシュは AgileX Robotics オリジナルライセンスに従う
-- 動画 `output/*.mp4` は NEDO Challenge 公募応募の一部として提示するもの
+- **株式会社エムスクエア・ラボ 社内実機実証**（YouTube 限定公開、提案書 §g で URL 提示）: AgileX PiPER + RealSense + YOLO + MoveIt 2 による果実自律収穫 End-to-End。コンテスト 1 識別 + コンテスト 3 把持の中核技術と完全同型
+- **NEDO Challenge Q-2 Niobi**: QUBO 医療臓器マッチング、2026/6 成果報告予定。コンテスト3 積付計算と技術構造同型
+- **暗号 OSS hyde**（crates.io 公開、TPM + ML-KEM-768）: Mobile Mover 群協調の安全通信層の素材
+- **セキュリティ研究実績**: CVE-2026-33524 / CVE-2026-33666（zserio 脆弱性、43 OEM 影響、ROS / AUTOSAR 関連）、ROS2 脆弱性発見、デジタル庁 OSS 監査 7件
 
 ---
 
-提案書本体（`/data/nedo/様式3-1_提案書_コンテスト1_手荷物識別_v2.docx` / `様式3-3_提案書_コンテスト3_積付ロボット_v2.docx`）の §g 「これまでの類似の技術開発・実装実績」項目から本リポジトリの GitHub URL を参照する想定。
+## 10. ライセンス
+
+本リポジトリ内のコード（`scripts/`, `worlds/`, `urdf/`, `launch/`, `config/`）は MIT License。
+
+外部アセット:
+- AgileX PiPER メッシュは AgileX Robotics オリジナルライセンス
+- 動画 `output/*.mp4` は NEDO Challenge 公募応募の一部として提示
