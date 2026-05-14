@@ -240,7 +240,9 @@ def main():
     # cannot accidentally shutdown the context mid-demo.
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = PickPlace()
-    time.sleep(0.5)
+    spinner = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spinner.start()
+    time.sleep(1.0)
     cycles = int(sys.argv[1]) if len(sys.argv) > 1 else 4
     log_event({"phase": "init", "total_cycles": cycles})
 

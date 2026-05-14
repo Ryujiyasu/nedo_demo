@@ -15,6 +15,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import Image
 
 
@@ -193,7 +194,7 @@ class Annotator(Node):
 
 
 def main():
-    rclpy.init()
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     n = Annotator()
     try:
         rclpy.spin(n)
